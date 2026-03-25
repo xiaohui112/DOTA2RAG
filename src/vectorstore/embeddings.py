@@ -1,6 +1,5 @@
 """Embedding 向量化封装"""
 import logging
-from typing import List
 
 from langchain_openai import OpenAIEmbeddings
 
@@ -18,7 +17,7 @@ class DashScopeEmbeddings(OpenAIEmbeddings):
             model=settings.EMBEDDING_MODEL,
             openai_api_key=settings.DASHSCOPE_API_KEY,
             openai_api_base=settings.API_BASE_URL,
-            chunk_size=6,  # DashScope 每批最多 10 个，留余量设为 6
+            chunk_size=10,  # DashScope 每批最多 25 个，保守设为 10
             # 关键：禁用 tiktoken 分词，直接发送原始字符串
             # DashScope 不支持 token 数组格式，只接受字符串输入
             check_embedding_ctx_length=False,

@@ -2,6 +2,7 @@
 import re
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Dict, Any, Optional
 from html import unescape
 
@@ -99,43 +100,6 @@ def add_metadata(
         "source": source,
         "category": category,
         "entity_name": entity_name or data.get("name", ""),
-        "last_updated": datetime.utcnow().isoformat(),
+        "last_updated": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
     }
     return data
-
-
-def clean_document(
-    text: str,
-    source: str,
-    category: str,
-    entity_name: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    清洗文档并添加元数据
-    
-    Args:
-        text: 原始文档文本
-        source: 数据来源
-        category: 数据类别
-        entity_name: 实体名称
-        
-    Returns:
-        包含清洗后文本和元数据的字典
-    """
-    # 清洗 HTML
-    cleaned = clean_html(text)
-    # 标准化空白字符
-    cleaned = normalize_whitespace(cleaned)
-    
-    # 构建文档对象
-    doc = {
-        "content": cleaned,
-        "metadata": {
-            "source": source,
-            "category": category,
-            "entity_name": entity_name or "",
-            "last_updated": datetime.utcnow().isoformat(),
-        },
-    }
-    
-    return doc

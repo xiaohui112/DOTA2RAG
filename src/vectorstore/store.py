@@ -84,8 +84,8 @@ class VectorStore:
             langchain_docs.append(langchain_doc)
             ids.append(doc_id)
         
-        # 分批添加文档（DashScope Embedding API 每批最多 10 个）
-        batch_size = 6
+        # 分批添加文档（DashScope Embedding API 每批最多 25 个，保守设为 10）
+        batch_size = 10
         total_added = 0
         for i in range(0, len(langchain_docs), batch_size):
             batch_docs = langchain_docs[i:i + batch_size]
@@ -178,8 +178,65 @@ class VectorStore:
     def list_collections(self) -> List[str]:
         """
         列出所有 Collection
-        
+
         Returns:
             Collection 名称列表
         """
         return list(COLLECTIONS.values())
+
+    def get_latest_patches(self, top_k: int = 5) -> List[Document]:
+        """
+        获取最新的补丁文档（按时间戳降序排序）
+
+        Args:
+            top_k: 返回的最新补丁数量
+
+        Returns:
+            按时间戳降序排序的补丁文档列表
+        """
+        collection = "patches"
+        if collection not in COLLECTIONS.values():
+            raise ValueError(f"无效的 Collection 名称: {collection}")
+
+        store = self.stores[collection]
+
+        # 获取所有补丁文档
+        # ChromaDB 的 get() 方法可以获取所有文档
+        results = store._collection.get(
+            include=["metadatas", "documents"]
+        )
+
+        if not results or not results.get("documents"):
+            logger.warning("[VectorStore] patches Collection 为空")
+            return []
+
+        # 转换为 Document 对象
+        docs = []
+        for i, (doc_text, metadata) in enumerate(zip(results["documents"], results["metadatas"])):
+            docs.append(Document(
+                page_content=doc_text,
+                metadata=metadata or {}
+            ))
+
+        # 按时间戳降序排序，优先使用 general 类型的文档（每个版本都有一个）
+        # 如果没有 general，则使用 summary，最后fallback到所有文档
+        general_docs = [doc for doc in docs if doc.metadata.get("change_category") == "general"]
+
+        if general_docs:
+            docs_to_sort = general_docs
+        else:
+            summary_docs = [doc for doc in docs if doc.metadata.get("change_category") == "summary"]
+            docs_to_sort = summary_docs if summary_docs else docs
+
+        # 按时间戳降序排序
+        sorted_docs = sorted(
+            docs_to_sort,
+            key=lambda x: x.metadata.get("patch_timestamp", 0),
+            reverse=True
+        )
+
+        logger.info(f"[VectorStore] 获取最新 {top_k} 个补丁，共 {len(sorted_docs)} 个版本")
+        if sorted_docs:
+            logger.info(f"[VectorStore] 最新版本: {[doc.metadata.get('patch_version') for doc in sorted_docs[:5]]}")
+
+        return sorted_docs[:top_k]

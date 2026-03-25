@@ -2,7 +2,8 @@
 import hashlib
 import logging
 import time
-from typing import Dict, Any, Optional, List
+from collections import OrderedDict
+from typing import Dict, Any, Optional, List, Tuple
 
 from langchain_openai import ChatOpenAI
 from langchain_core.documents import Document
@@ -16,19 +17,18 @@ logger = logging.getLogger(__name__)
 
 
 class ResponseCache:
-    """简单的内存缓存，基于查询文本的 hash"""
-    
-    def __init__(self, ttl: int = 3600):
-        self._cache: Dict[str, Dict[str, Any]] = {}
+    """LRU 内存缓存，基于查询文本的 hash，带大小上限"""
+
+    def __init__(self, ttl: int = 3600, maxsize: int = 500):
+        self._cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
         self._ttl = ttl
-    
+        self._maxsize = maxsize
+
     def _make_key(self, query: str, top_k: int, temperature: float) -> str:
-        """生成缓存键"""
         raw = f"{query.strip().lower()}|{top_k}|{temperature}"
         return hashlib.md5(raw.encode()).hexdigest()
-    
+
     def get(self, query: str, top_k: int = 5, temperature: float = 0.3) -> Optional[Dict[str, Any]]:
-        """查询缓存"""
         key = self._make_key(query, top_k, temperature)
         entry = self._cache.get(key)
         if entry is None:
@@ -36,33 +36,31 @@ class ResponseCache:
         if time.time() - entry["timestamp"] > self._ttl:
             del self._cache[key]
             return None
+        # 移到末尾（最近使用）
+        self._cache.move_to_end(key)
         return entry["data"]
-    
+
     def set(self, query: str, data: Dict[str, Any], top_k: int = 5, temperature: float = 0.3):
-        """写入缓存"""
         key = self._make_key(query, top_k, temperature)
-        self._cache[key] = {
-            "data": data,
-            "timestamp": time.time(),
-        }
-    
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = {"data": data, "timestamp": time.time()}
+        # 超出容量时淘汰最旧条目
+        while len(self._cache) > self._maxsize:
+            self._cache.popitem(last=False)
+
     def clear(self):
-        """清空缓存"""
         self._cache.clear()
 
 
 class RAGChain:
     """RAG 问答链"""
-    
+
     def __init__(self, vector_store: Optional[VectorStore] = None):
-        """
-        初始化 RAG Chain
-        
-        Args:
-            vector_store: 向量存储实例，如果为 None 则自动创建
-        """
         self.vector_store = vector_store or VectorStore()
         self.cache = ResponseCache(ttl=settings.CACHE_TTL)
+        # 按 (temperature, max_tokens) 缓存 LLM 实例，避免每次请求重复创建
+        self._llm_cache: Dict[Tuple[float, int], ChatOpenAI] = {}
         logger.info("RAG Chain 初始化完成")
     
     def _build_context(self, documents: List[Document]) -> str:
@@ -91,14 +89,17 @@ class RAGChain:
         return "\n\n".join(context_parts)
     
     def _get_llm(self, temperature: float = 0.3, max_tokens: int = 2048) -> ChatOpenAI:
-        """获取 LLM 实例"""
-        return ChatOpenAI(
-            model=settings.CHAT_MODEL,
-            openai_api_key=settings.DASHSCOPE_API_KEY,
-            openai_api_base=settings.API_BASE_URL,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        """获取 LLM 实例（按参数缓存，避免重复创建）"""
+        key = (temperature, max_tokens)
+        if key not in self._llm_cache:
+            self._llm_cache[key] = ChatOpenAI(
+                model=settings.CHAT_MODEL,
+                openai_api_key=settings.DASHSCOPE_API_KEY,
+                openai_api_base=settings.API_BASE_URL,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        return self._llm_cache[key]
     
     async def ask(
         self,

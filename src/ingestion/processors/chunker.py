@@ -64,12 +64,13 @@ def chunk_patch_notes(patch_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     补丁说明分块：按类别（通用/英雄/物品）拆分为多个 chunk。
 
     如果英雄改动部分超过 1500 字符，进一步按英雄名拆分为独立 chunk。
-    每个 chunk 包含 patch_version、change_category 元数据。
+    每个 chunk 包含 patch_version、change_category、timestamp 元数据。
 
     Args:
         patch_data: 补丁数据字典，包含:
             - name: 版本号
             - date: 发布日期
+            - timestamp: 时间戳（可选）
             - general_changes: [str, ...]
             - hero_changes: [{"hero_name": str, "changes": [str]}, ...]
             - item_changes: [{"item_name": str, "changes": [str]}, ...]
@@ -80,6 +81,7 @@ def chunk_patch_notes(patch_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     chunks = []
     version = patch_data.get("name", patch_data.get("version", ""))
     date = patch_data.get("date", "")
+    timestamp = patch_data.get("timestamp", 0)
 
     base_metadata = patch_data.get("metadata", {})
 
@@ -104,6 +106,8 @@ def chunk_patch_notes(patch_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "category": "patch",
                 "entity_name": version,
                 "patch_version": version,
+                "patch_date": date,
+                "patch_timestamp": timestamp,
                 "change_category": "general",
             },
         })
@@ -127,6 +131,8 @@ def chunk_patch_notes(patch_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                         "category": "patch",
                         "entity_name": f"{version}_{hero_name}",
                         "patch_version": version,
+                        "patch_date": date,
+                        "patch_timestamp": timestamp,
                         "change_category": "hero",
                         "hero_name": hero_name,
                     },
@@ -141,6 +147,8 @@ def chunk_patch_notes(patch_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "category": "patch",
                     "entity_name": version,
                     "patch_version": version,
+                    "patch_date": date,
+                    "patch_timestamp": timestamp,
                     "change_category": "hero",
                 },
             })
@@ -171,6 +179,8 @@ def chunk_patch_notes(patch_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "category": "patch",
                 "entity_name": version,
                 "patch_version": version,
+                "patch_date": date,
+                "patch_timestamp": timestamp,
                 "change_category": "item",
             },
         })
@@ -201,6 +211,8 @@ def chunk_patch_notes(patch_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "category": "patch",
                 "entity_name": version,
                 "patch_version": version,
+                "patch_date": date,
+                "patch_timestamp": timestamp,
                 "change_category": "neutral_item",
             },
         })
@@ -218,6 +230,8 @@ def chunk_patch_notes(patch_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "category": "patch",
                 "entity_name": version,
                 "patch_version": version,
+                "patch_date": date,
+                "patch_timestamp": timestamp,
                 "change_category": "summary",
             },
         })

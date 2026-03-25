@@ -156,11 +156,37 @@ def _load_ability_id_map() -> Dict[int, str]:
 
 
 def _load_item_id_map() -> Dict[int, str]:
-    """从 OpenDota API 加载 item_id → 物品显示名称 映射"""
+    """
+    从 Dota 2 官方 API 加载 item_id → 物品中文名称 映射。
+    优先使用官方中文名，降级到 OpenDota 英文名。
+    """
     global _item_id_map
     if _item_id_map is not None:
         return _item_id_map
 
+    # 优先从 Dota 2 官方 API 获取（有中文名）
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get("https://www.dota2.com/datafeed/itemlist?language=schinese")
+            resp.raise_for_status()
+            data = resp.json()
+
+            if "result" in data and "data" in data["result"]:
+                items = data["result"]["data"].get("itemabilities", [])
+                _item_id_map = {}
+                for item in items:
+                    if isinstance(item, dict) and "id" in item:
+                        # 优先使用中文显示名，降级到内部名称
+                        item_id = item["id"]
+                        name = item.get("name_loc", "") or item.get("name", f"Item #{item_id}")
+                        _item_id_map[item_id] = name
+
+                logger.info(f"已从 Dota 2 官方 API 加载 {len(_item_id_map)} 个物品中文名映射")
+                return _item_id_map
+    except Exception as e:
+        logger.warning(f"从 Dota 2 官方 API 加载物品映射失败: {e}，降级到 OpenDota")
+
+    # 降级：从 OpenDota API 获取（英文名）
     try:
         with httpx.Client(timeout=15.0) as client:
             resp = client.get(f"{OPENDOTA_BASE_URL}/api/constants/items")
@@ -170,9 +196,9 @@ def _load_item_id_map() -> Dict[int, str]:
             for key, val in items.items():
                 if isinstance(val, dict) and "id" in val:
                     _item_id_map[val["id"]] = val.get("dname", key)
-            logger.info(f"已加载 {len(_item_id_map)} 个物品 ID 映射")
+            logger.info(f"已从 OpenDota 加载 {len(_item_id_map)} 个物品英文名映射")
     except Exception as e:
-        logger.warning(f"加载物品 ID 映射失败: {e}")
+        logger.warning(f"加载物品 ID 映射全部失败: {e}")
         _item_id_map = {}
 
     return _item_id_map

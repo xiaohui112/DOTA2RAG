@@ -92,7 +92,11 @@ class DataStatusResponse(BaseModel):
     sources: Dict[str, SourceStatusInfo] = Field(default_factory=dict, description="各数据源状态")
 
 
-class ErrorResponse(BaseModel):
-    """错误响应"""
-    error: str = Field(description="错误类型")
-    message: str = Field(description="可读错误信息")
+class IngestTaskStatus(BaseModel):
+    """数据采集任务状态"""
+    task_id: str = Field(description="任务 ID")
+    source: str = Field(description="数据源")
+    status: str = Field(description="任务状态: pending | running | completed | failed")
+    started_at: str = Field(description="开始时间")
+    completed_at: Optional[str] = Field(default=None, description="完成时间")
+    error: Optional[str] = Field(default=None, description="错误信息（仅 failed 时）")

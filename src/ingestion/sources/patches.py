@@ -7,7 +7,8 @@
 """
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional
 
 import httpx
@@ -60,11 +61,11 @@ def _fetch_patch_list() -> List[Dict[str, Any]]:
 
 
 def _timestamp_to_date(ts: int) -> str:
-    """将 Unix 时间戳转为 ISO 日期字符串"""
+    """将 Unix 时间戳转为 ISO 日期字符串（东八区）"""
     if not ts:
         return ""
     try:
-        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        return datetime.fromtimestamp(ts, tz=ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d")
     except (ValueError, OSError):
         return ""
 
@@ -128,11 +129,13 @@ def fetch_patches(since_version: Optional[str] = None) -> List[Dict[str, Any]]:
     for patch in patch_list:
         version = patch["name"]
         date = patch["date"]
+        timestamp = patch.get("timestamp", 0)
         scraped = scraped_data.get(version, {})
 
         patch_entry = {
             "name": version,
             "date": date,
+            "timestamp": timestamp,
             "general_changes": scraped.get("general_changes", []),
             "hero_changes": scraped.get("hero_changes", []),
             "item_changes": scraped.get("item_changes", []),

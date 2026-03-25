@@ -1,7 +1,8 @@
 """数据版本追踪模块——管理 data/version_meta.json 的读写"""
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -80,7 +81,7 @@ class VersionTracker:
             **extra: 额外字段（如 latest_patch）
         """
         meta = self.read_version_meta()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
 
         source_info = meta.get("sources", {}).get(source, {})
         source_info["count"] = count
