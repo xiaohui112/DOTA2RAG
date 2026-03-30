@@ -80,7 +80,7 @@ def fetch_patches(since_version: Optional[str] = None) -> List[Dict[str, Any]]:
       3. 对每个版本调用 patchnotes datafeed API 获取详细中文变更内容
 
     Args:
-        since_version: 可选，仅获取该版本之后的新补丁（增量模式）
+        since_version: 可选，从该版本开始获取补丁（包含该版本本身）
 
     Returns:
         版本更新列表
@@ -106,9 +106,9 @@ def fetch_patches(since_version: Optional[str] = None) -> List[Dict[str, Any]]:
     if since_version and patch_list:
         filtered = _filter_patches_since(patch_list, since_version)
         if not filtered:
-            logger.info(f"没有比 {since_version} 更新的补丁")
+            logger.info(f"未找到版本 {since_version} 或之后的补丁")
             return []
-        logger.info(f"增量模式: 过滤出 {len(filtered)} 个新版本 (自 {since_version} 之后)")
+        logger.info(f"增量模式: 过滤出 {len(filtered)} 个版本 (从 {since_version} 开始，包含该版本)")
         patch_list = filtered
 
     # 3. 从 Dota 2 官方 datafeed API 获取每个版本的详细变更
@@ -158,11 +158,11 @@ def _filter_patches_since(
     patch_list: List[Dict[str, Any]],
     since_version: str,
 ) -> List[Dict[str, Any]]:
-    """过滤出 since_version 之后的补丁"""
+    """过滤出 since_version 及之后的补丁（包含指定版本）"""
     names = [p.get("name", "") for p in patch_list]
     try:
         idx = names.index(since_version)
-        return patch_list[idx + 1:]
+        return patch_list[idx:]  # 包含指定版本本身
     except ValueError:
         logger.warning(f"未找到版本 {since_version}，返回全部补丁")
         return patch_list

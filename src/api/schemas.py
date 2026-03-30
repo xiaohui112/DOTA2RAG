@@ -40,7 +40,8 @@ class AskResponse(BaseModel):
 class IngestRequest(BaseModel):
     """数据采集请求"""
     source: str = Field(default="all", description="数据源名称")
-    
+    version: Optional[str] = Field(default=None, description="指定版本号（仅 patches 数据源有效，例如 '7.40'）")
+
     @field_validator("source")
     @classmethod
     def validate_source(cls, v: str) -> str:

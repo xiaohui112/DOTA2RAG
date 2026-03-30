@@ -3,14 +3,13 @@ import argparse
 import logging
 import sys
 import time
-from typing import List, Dict, Any
 
 from src.ingestion.sources.heroes import fetch_heroes
 from src.ingestion.sources.items import fetch_items
 from src.ingestion.sources.abilities import fetch_abilities
 from src.ingestion.sources.patches import fetch_patches
 from src.ingestion.sources.wiki import fetch_wiki
-from src.ingestion.processors.cleaner import add_metadata, clean_html, normalize_whitespace
+from src.ingestion.processors.cleaner import add_metadata
 from src.ingestion.processors.chunker import chunk_hero_item, chunk_patch_notes, chunk_wiki_article
 from src.ingestion.version_tracker import VersionTracker
 from src.vectorstore.store import VectorStore
@@ -170,16 +169,17 @@ def ingest_wiki(vector_store: VectorStore) -> int:
     return len(all_chunks)
 
 
-def run_ingest(source: str = "all", incremental: bool = False):
+def run_ingest(source: str = "all", incremental: bool = False, since_version: str = None):
     """
     执行数据采集
 
     Args:
         source: 数据源（heroes/items/abilities/patches/wiki/all）
         incremental: 是否增量更新模式
+        since_version: 指定版本号（仅 patches 数据源有效），从该版本之后开始更新
     """
     start_time = time.time()
-    logger.info(f"开始数据采集任务: source={source}, incremental={incremental}")
+    logger.info(f"开始数据采集任务: source={source}, incremental={incremental}, since_version={since_version}")
 
     vector_store = VectorStore()
     tracker = VersionTracker()
@@ -203,7 +203,7 @@ def run_ingest(source: str = "all", incremental: bool = False):
         "heroes": lambda: _ingest_source_heroes(vector_store, tracker, freshness),
         "items": lambda: _ingest_source_items(vector_store, tracker, freshness),
         "abilities": lambda: _ingest_source_abilities(vector_store, tracker),
-        "patches": lambda: _ingest_source_patches(vector_store, tracker, meta, freshness, incremental),
+        "patches": lambda: _ingest_source_patches(vector_store, tracker, meta, freshness, incremental, since_version),
         "wiki": lambda: _ingest_source_wiki(vector_store, tracker),
     }
 
@@ -235,14 +235,14 @@ def run_ingest(source: str = "all", incremental: bool = False):
         logger.info(f"  {collection}: {count} 个文档")
 
 
-def _ingest_source_heroes(vector_store, tracker, freshness):
+def _ingest_source_heroes(vector_store, tracker, freshness=None):
     """采集英雄数据并更新版本追踪"""
     count = ingest_heroes(vector_store)
     tracker.update_source_meta("heroes", count)
     return count
 
 
-def _ingest_source_items(vector_store, tracker, freshness):
+def _ingest_source_items(vector_store, tracker, freshness=None):
     """采集物品数据并更新版本追踪"""
     count = ingest_items(vector_store)
     tracker.update_source_meta("items", count)
@@ -256,13 +256,21 @@ def _ingest_source_abilities(vector_store, tracker):
     return count
 
 
-def _ingest_source_patches(vector_store, tracker, meta, freshness, incremental=False):
+def _ingest_source_patches(vector_store, tracker, meta, freshness, incremental=False, version_override=None):
     """采集补丁数据并更新版本追踪"""
-    # 仅在增量模式下使用 since_version
-    since_version = None
-    if incremental:
-        since_version = meta.get("sources", {}).get("patches", {}).get("latest_patch") or None
-    count, latest_patch = ingest_patches(vector_store, since_version=since_version)
+    # 优先级：version_override > incremental 模式 > 全量
+    target_version = None
+    if version_override:
+        # API 明确指定版本号
+        target_version = version_override
+        logger.info(f"使用指定版本号: {target_version}")
+    elif incremental:
+        # 增量模式：从上次记录的版本开始
+        target_version = meta.get("sources", {}).get("patches", {}).get("latest_patch") or None
+        if target_version:
+            logger.info(f"增量模式：从上次版本 {target_version} 开始")
+
+    count, latest_patch = ingest_patches(vector_store, since_version=target_version)
 
     # 使用采集返回的最新版本号，如果为空则从 freshness 中获取
     if not latest_patch and freshness:

@@ -375,27 +375,65 @@ curl http://localhost:8000/api/stats
 
 **POST** `/api/ingest`
 
-触发数据采集任务。
+触发数据采集任务（异步后台执行）。
 
 #### 请求参数
 
 ```json
 {
-  "full_reload": false
+  "source": "patches",     // 数据源: heroes/items/patches/wiki/all
+  "version": "7.40"        // 可选：指定版本号（仅 patches 有效）
 }
 ```
+
+**参数说明**：
+- `source`: 数据源名称，支持 `heroes`、`items`、`patches`、`wiki`、`all`
+- `version`: （可选）指定版本号，仅在 `source=patches` 时有效
+  - 例如 `"7.40"` 表示从 7.40 版本开始更新（包含 7.40 本身）
+  - 不指定时为全量更新
 
 #### 响应示例
 
 ```json
 {
-  "status": "success",
-  "message": "数据采集完成",
-  "stats": {
-    "total_documents": 8459,
-    "duration_seconds": 312.45
-  }
+  "status": "accepted",
+  "message": "数据采集任务已触发: patches，从版本 7.40 开始更新，task_id=xxx",
+  "source": "patches"
 }
+```
+
+#### 查询任务状态
+
+**GET** `/api/ingest/{task_id}`
+
+```json
+{
+  "task_id": "xxx",
+  "source": "patches",
+  "status": "completed",      // pending/running/completed/failed
+  "started_at": "2026-03-30T10:00:00",
+  "completed_at": "2026-03-30T10:05:23",
+  "error": null
+}
+```
+
+#### 使用示例
+
+```bash
+# 全量更新所有 patches
+curl -X POST "http://localhost:8000/api/ingest" \
+  -H "Content-Type: application/json" \
+  -d '{"source": "patches"}'
+
+# 从 7.40 版本开始更新（包含 7.40）
+curl -X POST "http://localhost:8000/api/ingest" \
+  -H "Content-Type: application/json" \
+  -d '{"source": "patches", "version": "7.40"}'
+
+# 更新其他数据源
+curl -X POST "http://localhost:8000/api/ingest" \
+  -H "Content-Type: application/json" \
+  -d '{"source": "heroes"}'
 ```
 
 ### 3. 健康检查接口

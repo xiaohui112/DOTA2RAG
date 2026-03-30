@@ -29,7 +29,7 @@ def _make_task(task_id: str, source: str) -> dict:
     }
 
 
-async def _run_ingest(task_id: str, source: str):
+async def _run_ingest(task_id: str, source: str, version: Optional[str] = None):
     """后台执行数据采集任务（调用 runner.run_ingest）"""
     _tasks[task_id]["status"] = "running"
     try:
@@ -37,17 +37,17 @@ async def _run_ingest(task_id: str, source: str):
 
         loop = asyncio.get_event_loop()
         # run_ingest 是同步函数，放到线程池执行，避免阻塞事件循环
-        await loop.run_in_executor(None, run_ingest, source)
+        await loop.run_in_executor(None, run_ingest, source, False, version)
 
         _tasks[task_id]["status"] = "completed"
         _tasks[task_id]["completed_at"] = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
-        logger.info(f"数据采集任务完成: task_id={task_id}, source={source}")
+        logger.info(f"数据采集任务完成: task_id={task_id}, source={source}, version={version}")
 
     except Exception as e:
         _tasks[task_id]["status"] = "failed"
         _tasks[task_id]["completed_at"] = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
         _tasks[task_id]["error"] = str(e)
-        logger.error(f"数据采集任务失败: task_id={task_id}, source={source}, error={e}", exc_info=True)
+        logger.error(f"数据采集任务失败: task_id={task_id}, source={source}, version={version}, error={e}", exc_info=True)
 
 
 @router.post(
@@ -61,15 +61,21 @@ async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
     触发数据采集任务（异步后台执行）。
 
     支持的数据源：heroes、items、patches、wiki、all
+    version 参数仅在 source=patches 时有效，用于指定从某版本开始更新（例如 "7.40"）
     返回 task_id，可通过 GET /api/ingest/{task_id} 查询进度。
     """
     task_id = str(uuid.uuid4())
     _tasks[task_id] = _make_task(task_id, request.source)
-    background_tasks.add_task(_run_ingest, task_id, request.source)
+    background_tasks.add_task(_run_ingest, task_id, request.source, request.version)
+
+    message = f"数据采集任务已触发: {request.source}"
+    if request.version and request.source == "patches":
+        message += f"，从版本 {request.version} 开始更新"
+    message += f"，task_id={task_id}"
 
     return IngestResponse(
         status="accepted",
-        message=f"数据采集任务已触发: {request.source}，task_id={task_id}",
+        message=message,
         source=request.source,
     )
 

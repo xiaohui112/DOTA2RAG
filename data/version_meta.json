@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-03-25T15:06:48.595850+08:00",
-  "game_version": "7.41",
+  "last_updated": "2026-03-30T14:52:54.439593+08:00",
+  "game_version": "7.41a",
   "sources": {
     "wiki": {
       "count": 22,
@@ -19,9 +19,9 @@
       "updated_at": "2026-03-25T11:54:49.351598+08:00"
     },
     "patches": {
-      "count": 5060,
-      "updated_at": "2026-03-25T15:06:48.595850+08:00",
-      "latest_patch": "7.41"
+      "count": 168,
+      "updated_at": "2026-03-30T14:52:54.439593+08:00",
+      "latest_patch": "7.41a"
     }
   }
 }
